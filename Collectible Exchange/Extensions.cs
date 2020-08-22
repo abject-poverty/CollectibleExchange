@@ -12,18 +12,10 @@ using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.GameContent;
 
-namespace Collectible_Exchange
+namespace CollectibleExchange
 {
-    public static class ArrayStuff
+    public static class Extensions
     {
-        static readonly string[] woodtypes = new string[] {
-            "birch",
-            "oak",
-            "maple",
-            "pine",
-            "acacia",
-            "kapok",
-        };
 
         public static T NextR<T>(this T[] array, ref uint index)
         {
@@ -38,20 +30,6 @@ namespace Collectible_Exchange
         {
             index = index > 0 ? index - 1 : (uint)(array.Length-1);
             return array[index];
-        }
-
-        public static bool MatchingWood(this AssetLocation asset, ref string woodtype)
-        {
-            foreach (string a in woodtypes)
-            {
-                if (asset.ToString().Contains(a))
-                {
-                    woodtype = a;
-                    return true;
-                }
-            }
-            woodtype = null;
-            return false;
         }
 
         public static Block GetBlock(this BlockPos pos, IWorldAccessor world) { return world.BlockAccessor.GetBlock(pos); }

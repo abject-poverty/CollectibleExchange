@@ -12,7 +12,7 @@ using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.Common;
 
-namespace Collectible_Exchange
+namespace CollectibleExchange
 {
     public static class Sorting
 	{

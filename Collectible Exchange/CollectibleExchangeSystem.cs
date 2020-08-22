@@ -22,12 +22,11 @@ using Vintagestory.GameContent;
     Authors = new[] { "Novocain" },
     Version = "1.1.1")]
 
-namespace Collectible_Exchange
+namespace CollectibleExchange
 {
-    public class CollectibleExchange : ModSystem
+    public class CollectibleExchangeSystem : ModSystem
     {
         ICoreServerAPI sapi;
-        ICoreClientAPI capi;
         const string descriptionMsg = "Allows a player to create a collectible exchange from the chest you are looking at.";
         const string syntaxMsg = "Syntax: /ce [create|remove|update|list]";
 
@@ -35,19 +34,6 @@ namespace Collectible_Exchange
         {
             api.RegisterBlockEntityClass("Shop", typeof(BlockEntityShop));
         }
-
-        public override void StartClientSide(ICoreClientAPI api)
-        {
-            capi = api;
-            //api.Event.MouseDown += Interaction;
-        }
-
-        /*
-        private void Interaction(MouseEvent e)
-        {
-            if (e.Button == EnumMouseButton.Right && capi?.World?.Player?.CurrentBlockSelection?.BlockEntity(capi) is BlockEntityContainer) capi.SendChatMessage("/ce trade");
-        }
-        */
 
         public override void StartServerSide(ICoreServerAPI api)
         {
@@ -62,8 +48,6 @@ namespace Collectible_Exchange
                 if (byPlayer.CurrentBlockSelection?.BlockEntity(sapi) is BlockEntityShop) CmdCollectibleExchange(byPlayer, 0, new CmdArgs("trade"));
             };
         }
-
-
 
         private void ExchangeEvent(IServerPlayer byPlayer, BlockSelection blockSel)
         {

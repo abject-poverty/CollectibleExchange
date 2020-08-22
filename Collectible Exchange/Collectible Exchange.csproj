@@ -138,8 +138,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ArrayStuff.cs" />
-    <Compile Include="CollectibleExchange.cs" />
+    <Compile Include="Extensions.cs" />
+    <Compile Include="CollectibleExchangeSystem.cs" />
     <Compile Include="ItemSorting.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
