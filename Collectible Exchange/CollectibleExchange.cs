@@ -15,6 +15,13 @@ using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
+[assembly: ModInfo("Collectible Exchange",
+    Description = "Allows the creation of player owned shops.",
+    Side = "Universal",
+    RequiredOnClient = true,
+    Authors = new[] { "Novocain" },
+    Version = "1.1.1")]
+
 namespace Collectible_Exchange
 {
     public class CollectibleExchange : ModSystem
@@ -22,7 +29,7 @@ namespace Collectible_Exchange
         ICoreServerAPI sapi;
         ICoreClientAPI capi;
         const string descriptionMsg = "Allows a player to create a collectible exchange from the chest you are looking at.";
-        const string syntaxMsg = "Syntax: /ce [create|update|list]";
+        const string syntaxMsg = "Syntax: /ce [create|remove|update|list]";
 
         public override void Start(ICoreAPI api)
         {
@@ -32,13 +39,15 @@ namespace Collectible_Exchange
         public override void StartClientSide(ICoreClientAPI api)
         {
             capi = api;
-            api.Event.MouseDown += Interaction;
+            //api.Event.MouseDown += Interaction;
         }
 
+        /*
         private void Interaction(MouseEvent e)
         {
             if (e.Button == EnumMouseButton.Right && capi?.World?.Player?.CurrentBlockSelection?.BlockEntity(capi) is BlockEntityContainer) capi.SendChatMessage("/ce trade");
         }
+        */
 
         public override void StartServerSide(ICoreServerAPI api)
         {
@@ -47,6 +56,11 @@ namespace Collectible_Exchange
                 => CmdCollectibleExchange(byPlayer, id, args));
             api.RegisterCommand("ce", descriptionMsg, syntaxMsg, (byPlayer, id, args) 
                 => CmdCollectibleExchange(byPlayer, id, args));
+
+            api.Event.DidUseBlock += (byPlayer, blockSel) =>
+            {
+                if (byPlayer.CurrentBlockSelection?.BlockEntity(sapi) is BlockEntityShop) CmdCollectibleExchange(byPlayer, 0, new CmdArgs("trade"));
+            };
         }
 
 
@@ -72,9 +86,13 @@ namespace Collectible_Exchange
                             List<Exchange> exchanges = GetExchanges(be.Inventory);
                             sapi.World.BlockAccessor.RemoveBlockEntity(pos);
                             sapi.World.BlockAccessor.SpawnBlockEntity("Shop", pos);
+
                             BlockEntityShop beShop = (sapi.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityShop);
-                            beShop.inventory = (InventoryGeneric)be.Inventory;
+                            beShop.MeshAngle = be.MeshAngle;
+                            beShop.shopInventory = (InventoryGeneric)be.Inventory;
                             beShop.Exchanges = exchanges;
+                            beShop.MarkDirty(true);
+
                             sapi.World.PlaySoundAt(AssetLocation.Create("sounds/effect/latch"), pos.X, pos.Y, pos.Z);
                         }
                     }
@@ -82,8 +100,28 @@ namespace Collectible_Exchange
                 case "update":
                     if (!sapi.World.Claims.TryAccess(byPlayer, pos, EnumBlockAccessFlags.Use)) break;
                     BlockEntityShop shop = (sapi.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityShop);
-                    if (shop != null) shop.Exchanges = GetExchanges(shop.inventory);
+                    if (shop != null) shop.Exchanges = GetExchanges(shop.shopInventory);
+                    shop?.MarkDirty(true);
                     sapi.World.PlaySoundAt(AssetLocation.Create("sounds/effect/latch"), pos.X, pos.Y, pos.Z);
+                    break;
+                case "remove":
+                    if (pos != null)
+                    {
+                        if (!sapi.World.Claims.TryAccess(byPlayer, pos, EnumBlockAccessFlags.Use)) break;
+                        BlockEntityShop beShop = (sapi.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityShop);
+                        if (beShop != null)
+                        {
+                            sapi.World.BlockAccessor.RemoveBlockEntity(pos);
+                            sapi.World.BlockAccessor.SpawnBlockEntity("Shop", pos);
+
+                            BlockEntityGenericTypedContainer revert = sapi.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityGenericTypedContainer;
+                            revert.MeshAngle = beShop.MeshAngle;
+                            revert.SetField("inventory", (InventoryGeneric)beShop.Inventory);
+                            revert.MarkDirty(true);
+
+                            sapi.World.PlaySoundAt(AssetLocation.Create("sounds/effect/latch"), pos.X, pos.Y, pos.Z);
+                        }
+                    }
                     break;
                 case "list":
                     if (sapi.World.BlockAccessor.GetBlockEntity(pos) is BlockEntityShop)
@@ -129,10 +167,10 @@ namespace Collectible_Exchange
         }
     }
 
-    public class BlockEntityShop : BlockEntityGenericTypedContainerModified
+    public class BlockEntityShop : BlockEntityGenericTypedContainer
     {
-        public override InventoryGeneric inventory { get; set; }
-        public override InventoryBase Inventory => inventory;
+        public InventoryGeneric shopInventory { get => this.GetField<InventoryGeneric>("inventory"); set => this.SetField("inventory", value); }
+        public override InventoryBase Inventory => shopInventory;
         public List<Exchange> Exchanges { get; set; } = new List<Exchange>();
 
         public override void Initialize(ICoreAPI api)
@@ -159,7 +197,7 @@ namespace Collectible_Exchange
                                     byPlayer.Entity.World.SpawnItemEntity(dummy.Itemstack, Pos.ToVec3d());
                                 }
                                 Api.World.PlaySoundAt(AssetLocation.Create("sounds/effect/cashregister"), Pos.X, Pos.Y, Pos.Z);
-                                inventory.Sort(Api, EnumSortMode.ID);
+                                shopInventory.Sort(Api, EnumSortMode.ID);
                                 return true;
                             }
                         }
@@ -177,7 +215,7 @@ namespace Collectible_Exchange
             ItemSlot _exchangeSlot = new DummySlot();
 
             if (slot.Itemstack == null || exchange.Input == null || exchange.Output == null) return false;
-            foreach (var val in inventory)
+            foreach (var val in shopInventory)
             {
                 if (val.Empty)
                 {
@@ -186,7 +224,7 @@ namespace Collectible_Exchange
                 }
             }
 
-            if (emptySlot != null && inventory.Any(a =>
+            if (emptySlot != null && shopInventory.Any(a =>
                 {
                     if (a.Itemstack?.StackSize >= exchange.Output?.StackSize && (a.Itemstack?.Collectible?.Code?.ToString() == exchange.Output?.Collectible?.Code?.ToString() && a.Itemstack?.StackSize >= exchange.Output?.StackSize))
                     {
@@ -235,11 +273,14 @@ namespace Collectible_Exchange
 
         public override void GetBlockInfo(IPlayer forPlayer, StringBuilder builder)
         {
-            builder.AppendLine().AppendLine("Can Exchange:");
-            foreach (var val in Exchanges)
+            if (Exchanges.Count > 0)
             {
-                string ib = val.Input.Class == EnumItemClass.Block ? "block-" : "item-", ob = val.Output.Class == EnumItemClass.Block ? "block-" : "item-";
-                builder.AppendLine(val.Input.StackSize + "x " + Lang.Get(ib + val.Input.Collectible.Code.ToShortString()) + " For " + val.Output.StackSize + "x " + Lang.Get(ob + val.Output.Collectible.Code.ToShortString()));
+                builder.AppendLine("Can Exchange:");
+                foreach (var val in Exchanges)
+                {
+                    string ib = val.Input.Class == EnumItemClass.Block ? "block-" : "item-", ob = val.Output.Class == EnumItemClass.Block ? "block-" : "item-";
+                    builder.AppendLine(val.Input.StackSize + "x " + Lang.Get(ib + val.Input.Collectible.Code.ToShortString()) + " For " + val.Output.StackSize + "x " + Lang.Get(ob + val.Output.Collectible.Code.ToShortString()));
+                }
             }
         }
     }
